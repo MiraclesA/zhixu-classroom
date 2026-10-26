@@ -13,3 +13,4 @@ test-results/
 docs/接口验收结果.json
 docs/重启持久化验收.json
 docs/API调用记录.json
+docs/*.delivery.json
