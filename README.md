@@ -2,6 +2,10 @@
 
 基于用户提供的五角色 UI，实现 Java + MySQL 的本地课堂管理核心版。原型保留在 `reference/`；运行页面使用真实鉴权和业务 API，不再使用浏览器模拟账号或审批数据。
 
+## 项目架构
+
+[打开交互式架构图](https://miraclesa.github.io/zhixu-classroom/architecture.html)。图中的前端、认证、控制器、考勤服务、MySQL 与自动缺勤调度节点均附有固定到 Git 提交的源码链接；在图中点击源码标记即可查看对应实现。
+
 UI 已按用户纠正恢复为上传 HTML 的原页面模板。首页横幅、四指标卡、快捷入口、侧栏、5×8 座位图、彩色周课表、统计标签和弹窗均沿用原结构；`bridge.js` 与 `reference-data.js` 接入后端数据。31 项参考源码检查通过，视觉对照和交互证据见 `docs/ui-qa/design-qa.md`。重新生成 UI 时运行 `python scripts/prepare_web.py`，不要在 API 适配层另写页面布局。
 
 ## 启动
