@@ -1,0 +1,32 @@
+services:
+  mysql:
+    image: mysql:8.4.9
+    environment:
+      MYSQL_DATABASE: zhixu
+      MYSQL_USER: zhixu
+      MYSQL_PASSWORD: ${ZHIXU_DB_PASSWORD:?Set a private database password}
+      MYSQL_ROOT_PASSWORD: ${ZHIXU_ROOT_PASSWORD:?Set a separate private root password}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD, mysqladmin, ping, -h, localhost]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+  web:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    environment:
+      ZHIXU_DB_URL: jdbc:mysql://mysql:3306/zhixu?connectionTimeZone=%2B08:00&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+      ZHIXU_DB_USER: zhixu
+      ZHIXU_DB_PASSWORD: ${ZHIXU_DB_PASSWORD}
+      ZHIXU_BIND: 0.0.0.0
+      ZHIXU_DEMO: ${ZHIXU_DEMO:-false}
+    ports:
+      - 127.0.0.1:8097:8097
+    depends_on:
+      mysql:
+        condition: service_healthy
+volumes:
+  mysql-data:

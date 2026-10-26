@@ -1,0 +1,1170 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "知序课堂核心 API",
+    "version": "1.0.0",
+    "description": "固定时区 Asia/Shanghai (+08:00)。role=student/teacher/counselor/vice/dean；考勤=PRESENT/LATE/ABSENT/LEAVE。多个任课教师全部首审后才升级节点。"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8097/api/v1"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "MySQL 健康检查",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": []
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "账号登录",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "学校名单核验注册",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/reset-request": {
+      "post": {
+        "summary": "登记人工核验找回请求",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "身份和学校归属",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/logout": {
+      "post": {
+        "summary": "服务端注销",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/timetable": {
+      "get": {
+        "summary": "周课表",
+        "parameters": [
+          {
+            "name": "weekStart",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/lesson-sessions/current": {
+      "get": {
+        "summary": "正在上课的课次",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/lesson-sessions/{sid}/check-in": {
+      "post": {
+        "summary": "逐课次报到（≤5正常，(5,30]迟到）",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/time": {
+      "patch": {
+        "summary": "任课教师调整本节开始和结束时间",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startAt": {
+                    "type": "string"
+                  },
+                  "endAt": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/seats": {
+      "get": {
+        "summary": "所属课次座位和考勤",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/lesson-sessions/{sid}/attendance/{student}": {
+      "patch": {
+        "summary": "任课教师更正并留痕",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "student",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/hand-raises": {
+      "post": {
+        "summary": "举手或撤销",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "raised": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/messages": {
+      "get": {
+        "summary": "群聊及本人参与的私聊",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "发群聊或师生私聊",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "receiverId": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/scores": {
+      "post": {
+        "summary": "教师课堂评分（0–100整数）",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "studentId": {
+                    "type": "integer"
+                  },
+                  "score": {
+                    "type": "integer"
+                  },
+                  "remark": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lesson-sessions/{sid}/events": {
+      "get": {
+        "summary": "SSE 课次刷新事件（Bearer 鉴权）",
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/leave/eligible-sessions": {
+      "get": {
+        "summary": "学生可选择的课次",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/leave/applications": {
+      "post": {
+        "summary": "提交申请（跨度和流程由服务端计算）",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "startDate": {
+                    "type": "string"
+                  },
+                  "endDate": {
+                    "type": "string"
+                  },
+                  "sessionIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "attachmentId": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/leave/applications/mine": {
+      "get": {
+        "summary": "权限范围内的申请及日志",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/approvals/pending": {
+      "get": {
+        "summary": "本人当前待办",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/approvals/{aid}/decision": {
+      "post": {
+        "summary": "当前节点审批",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/attendance": {
+      "get": {
+        "summary": "权限范围内的考勤记录",
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "student",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "summary": "本人站内通知",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/attachments": {
+      "post": {
+        "summary": "私有 PNG/JPEG 上传（5MB）",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型"
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/attachments/{aid}": {
+      "get": {
+        "summary": "受权限保护的附件",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "统一 code/message/data/requestId 响应；特殊流和图片见 content 类型",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数无效"
+          },
+          "401": {
+            "description": "未登录或凭据错误"
+          },
+          "403": {
+            "description": "身份或数据范围无权限"
+          },
+          "409": {
+            "description": "状态、重复或时间窗口冲突"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "随机 256 位会话；服务端只存 SHA-256 哈希，12 小时到期。"
+      }
+    }
+  }
+}

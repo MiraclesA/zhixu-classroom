@@ -1,0 +1,3 @@
+function api(path,method='GET',data){const app=getApp();return new Promise((resolve,reject)=>wx.request({url:app.globalData.baseURL+path,method,data,header:{Authorization:'Bearer '+app.globalData.token,'Content-Type':'application/json'},success:r=>{if(r.statusCode===401){app.globalData.token='';wx.reLaunch({url:'/pages/login/index'});}if(r.statusCode>=200&&r.statusCode<300&&r.data.code===0)resolve(r.data.data);else reject(Error(r.data.message||'请求失败'));},fail:()=>reject(Error('无法连接后端，请检查服务地址和合法域名配置'))}));}
+function error(e){wx.showToast({title:e.message,icon:'none',duration:3500});}
+module.exports={api,error};

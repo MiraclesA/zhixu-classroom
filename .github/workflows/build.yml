@@ -1,0 +1,17 @@
+name: Build core
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+          cache-dependency-path: server/pom.xml
+      - run: mvn -B -f server/pom.xml verify
+      - run: node --check server/src/main/resources/static/bridge.js
+      - run: node --check server/src/main/resources/static/auth.js
+      - run: node --check server/src/main/resources/static/app.js

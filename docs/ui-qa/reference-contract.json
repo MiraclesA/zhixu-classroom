@@ -1,0 +1,41 @@
+{
+  "passed": 31,
+  "checks": [
+    "style.css byte-identical",
+    "auth.css byte-identical",
+    "heroBlock reference layout",
+    "stats reference layout",
+    "homePage reference layout",
+    "teacherHome reference layout",
+    "studentHome reference layout",
+    "counselorHome reference layout",
+    "adminHome reference layout",
+    "classRoom reference layout",
+    "studentRoom reference layout",
+    "timetablePage reference layout",
+    "leavePage reference layout",
+    "historyPage reference layout",
+    "approvalsPage reference layout",
+    "approvalItem reference layout",
+    "recordsPage reference layout",
+    "analyticsPage reference layout",
+    "comparePage reference layout",
+    "chatPage reference layout",
+    "chatMessages reference layout",
+    "openChat reference layout",
+    "studentSeat reference layout",
+    "seatAction reference layout",
+    "review reference layout",
+    "showRequest reference layout",
+    "showHelp reference layout",
+    "openNotifications reference layout",
+    "bridge.js has no replacement views",
+    "reference-data.js has no replacement views",
+    "Original icon paths identical (line endings normalized)"
+  ],
+  "allowedChanges": [
+    "Server-backed values and accurate status copy",
+    "Audit reason field and authenticated attachment links"
+  ],
+  "reference": "Uploaded HTML/CSS/JavaScript source"
+}

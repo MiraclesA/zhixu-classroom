@@ -1,0 +1,2 @@
+const {api,error}=require('../../lib/api');
+Page({data:{account:'',password:'',busy:false},field(e){this.setData({[e.currentTarget.dataset.key]:e.detail.value});},async login(){if(this.data.busy)return;this.setData({busy:true});try{const d=await api('/auth/login','POST',{account:this.data.account,password:this.data.password});const app=getApp();app.globalData.token=d.token;app.globalData.user=d.user;const url=d.user.role==='student'?'/pages/leave/index':'/pages/approval/index';wx.reLaunch({url});}catch(e){error(e);}finally{this.setData({busy:false});}}});

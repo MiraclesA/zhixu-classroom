@@ -1,0 +1,15 @@
+.local/
+.archify/
+server/target/
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+.env
+playwright-report/
+test-results/
+
+# 本机运行时生成的验收快照，不作为源码提交
+docs/接口验收结果.json
+docs/重启持久化验收.json
+docs/API调用记录.json
