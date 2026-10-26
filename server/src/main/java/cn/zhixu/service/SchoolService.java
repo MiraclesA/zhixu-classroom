@@ -8,25 +8,37 @@ import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class SchoolService {
   final JdbcTemplate db;
   final Clock clock;
   final String invite;
+  final TaskScheduler scheduler;
   final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
   final ConcurrentHashMap<String, List<Long>> attempts = new ConcurrentHashMap<>();
+  final Object absenceScheduleLock = new Object();
+  ScheduledFuture<?> nextAbsenceCheck;
 
   public SchoolService(
-      JdbcTemplate db, Clock clock, @Value("${zhixu.teacher-invite}") String invite) {
+      JdbcTemplate db,
+      Clock clock,
+      TaskScheduler scheduler,
+      @Value("${zhixu.teacher-invite}") String invite) {
     this.db = db;
     this.clock = clock;
+    this.scheduler = scheduler;
     this.invite = invite;
   }
 
@@ -81,16 +93,14 @@ public class SchoolService {
   }
 
   /**
-   * 自动补写缺勤记录；与学生点击“立即报到”的 {@link #checkIn(Map, long)} 完全独立。
+   * 在某一课次“开课后 30 分钟”的检查点补写缺勤记录；与学生点击“立即报到”的 {@link #checkIn(Map, long)} 完全独立。
    *
-   * <p>调度层只会在周一至周五的教学时段（08:00–18:59，Asia/Shanghai）唤醒本方法， 因而夜间和周末不会执行数据库扫描。方法运行后还会限定为“已开课满 30
-   * 分钟、但尚未下课”的 实际课次，避免过去所有历史课次在每分钟被重复扫描。
+   * <p>此方法不是每分钟轮询：{@link #scheduleNextAbsenceCheck()} 只为下一节待检查课次注册一次性任务。任务触发后，才执行本 SQL，
+   * 然后再安排下一次。应用刚启动或教师将上课时间改到已过 30 分钟时，会额外执行一次补偿，防止服务关闭期间遗漏。
    *
    * <p>SQL 只为没有 attendance 记录的学生插入 {@code ABSENT}。联合主键 {@code (session_id, student_id)} 与 {@code ON
-   * DUPLICATE KEY} 使操作可重复执行； 已签到、已请假或被教师更正过的记录绝不会被覆盖。
+   * DUPLICATE KEY} 使操作可重复执行；已签到、已请假或被教师更正过的记录绝不会被覆盖。
    */
-  @Scheduled(cron = "0 * 8-18 * * MON-FRI", zone = "Asia/Shanghai")
-  @Transactional
   public void finalizeAbsences() {
     LocalDateTime checkedAt = now();
     LocalDateTime absenceDeadline = checkedAt.minusMinutes(30);
@@ -107,6 +117,68 @@ public class SchoolService {
         """,
         absenceDeadline,
         checkedAt);
+  }
+
+  /** 服务可用后只补一次遗漏记录，再把下一次检查精确预约到下一节课的开始后 30 分钟。 */
+  @EventListener(ApplicationReadyEvent.class)
+  public void initializeAbsenceSchedule() {
+    finalizeAbsences();
+    scheduleNextAbsenceCheck();
+  }
+
+  /**
+   * 查找下一节尚未到达检查点的课，并只保留一个一次性调度任务。
+   *
+   * <p>例如课次 10:00 开始，则任务在 10:30 执行一次；它不是每分钟查询 lessons 表。若没有未来检查点，不会保留空转任务。
+   */
+  void scheduleNextAbsenceCheck() {
+    LocalDateTime checkedAt = now();
+    List<Map<String, Object>> rows =
+        db.queryForList(
+            "SELECT MIN(start_at) AS next_start FROM lessons WHERE start_at>? AND end_at>?",
+            checkedAt.minusMinutes(30),
+            checkedAt);
+    Object nextStartValue = rows.isEmpty() ? null : rows.get(0).get("next_start");
+    LocalDateTime nextStart = nextStartValue == null ? null : time(nextStartValue);
+
+    synchronized (absenceScheduleLock) {
+      if (nextAbsenceCheck != null) {
+        nextAbsenceCheck.cancel(false);
+        nextAbsenceCheck = null;
+      }
+      if (nextStart == null) return;
+
+      Instant deadline = nextStart.plusMinutes(30).atZone(clock.getZone()).toInstant();
+      nextAbsenceCheck = scheduler.schedule(this::runScheduledAbsenceCheck, deadline);
+    }
+  }
+
+  /** 一次性任务的入口：处理当前到点课次，并立即预约下一节课。 */
+  void runScheduledAbsenceCheck() {
+    try {
+      finalizeAbsences();
+    } finally {
+      scheduleNextAbsenceCheck();
+    }
+  }
+
+  /**
+   * 教师改课时间后，必须等事务提交再取消旧定时器、按新时间重新预约；提交失败时不改变已有预约。
+   */
+  void rescheduleAbsenceCheckAfterCommit() {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      finalizeAbsences();
+      scheduleNextAbsenceCheck();
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            finalizeAbsences();
+            scheduleNextAbsenceCheck();
+          }
+        });
   }
 
   public static LocalDateTime time(Object o) {
@@ -320,6 +392,7 @@ public class SchoolService {
         end,
         sid);
     audit(u, "LESSON_TIME", sid, before, after, "任课教师调整上课时间");
+    rescheduleAbsenceCheckAfterCommit();
     return lesson(u, sid);
   }
 
