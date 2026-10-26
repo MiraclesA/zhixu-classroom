@@ -13,21 +13,31 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * HTTP / SSE 适配层。
+ *
+ * <p>控制器负责把请求参数交给 {@link SchoolService}、包装统一响应并在课堂状态变动后发送 SSE 刷新事件； 身份认证由 {@code AuthFilter}
+ * 完成，细粒度角色和数据范围校验仍由服务层完成。
+ */
 @RestController
 @RequestMapping("/api/v1")
 public class ApiController {
   final SchoolService school;
+
+  /** 以课次 ID 分组的 SSE 连接：同一课堂的状态变化只通知该课堂的浏览器。 */
   final ConcurrentHashMap<Long, Set<SseEmitter>> subscribers = new ConcurrentHashMap<>();
 
   ApiController(SchoolService school) {
     this.school = school;
   }
 
+  /** 读取 AuthFilter 已认证并放入请求上下文的用户资料。 */
   @SuppressWarnings("unchecked")
   Map<String, Object> user(HttpServletRequest r) {
     return (Map<String, Object>) r.getAttribute("user");
   }
 
+  /** 递归转换 JDBC 时间类型，使 JSON 始终携带 +08:00 时区信息。 */
   Object wire(Object data) {
     if (data instanceof LocalDateTime t) return t.atOffset(ZoneOffset.ofHours(8));
     if (data instanceof java.sql.Timestamp t)
@@ -42,6 +52,7 @@ public class ApiController {
     return data;
   }
 
+  /** 生成统一成功响应：code、message、data 和可用于排查的 requestId。 */
   Map<String, Object> ok(Object data) {
     return Map.of(
         "code",
@@ -54,6 +65,7 @@ public class ApiController {
         UUID.randomUUID().toString());
   }
 
+  /** 向订阅同一课次的浏览器发送 refresh 事件，并清理已经断开的连接。 */
   void update(long sid) {
     for (SseEmitter e : subscribers.getOrDefault(sid, Set.of()))
       try {
@@ -63,6 +75,7 @@ public class ApiController {
       }
   }
 
+  /** 健康检查同时验证 Web 服务和 MySQL 连接是否可用。 */
   @GetMapping("/health")
   Map<String, Object> health() {
     school.database().queryForObject("SELECT 1", Integer.class);
@@ -74,17 +87,20 @@ public class ApiController {
             school.now().atOffset(ZoneOffset.ofHours(8)).toString()));
   }
 
+  /** 登录成功后返回随机 Token 与当前用户资料；密码校验和限流由服务层处理。 */
   @PostMapping("/auth/login")
   Map<String, Object> login(@RequestBody Map<String, Object> b, HttpServletRequest r) {
     return ok(school.login(b, r.getRemoteAddr()));
   }
 
+  /** 注册学生或持有邀请码的教师账号。 */
   @PostMapping("/auth/register")
   Map<String, Object> register(@RequestBody Map<String, Object> b) {
     school.register(b);
     return ok(null);
   }
 
+  /** 记录密码重置申请；本地实训版不直接通过短信或邮件重置密码。 */
   @PostMapping("/auth/reset-request")
   Map<String, Object> reset(@RequestBody Map<String, Object> b) {
     String account = SchoolService.text(b, "account");
@@ -96,11 +112,13 @@ public class ApiController {
     return ok(Map.of("message", "已登记，请携带学号联系学校管理员核验重置。当前未接通短信或邮件。"));
   }
 
+  /** 返回当前 Bearer Token 对应的用户资料。 */
   @GetMapping("/me")
   Map<String, Object> me(HttpServletRequest r) {
     return ok(user(r));
   }
 
+  /** 删除当前 Token，使浏览器保存的会话立即失效。 */
   @PostMapping("/logout")
   Map<String, Object> logout(HttpServletRequest r) {
     school
@@ -111,12 +129,14 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 查询当前用户权限范围内的一周课表。 */
   @GetMapping("/timetable")
   Map<String, Object> timetable(@RequestParam String weekStart, HttpServletRequest r) {
     LocalDate start = LocalDate.parse(weekStart);
     return ok(school.timetable(user(r), start, start.plusDays(6)));
   }
 
+  /** 返回当前服务端时间正在进行的课次，供首页和课堂页定位当前课堂。 */
   @GetMapping("/lesson-sessions/current")
   Map<String, Object> current(HttpServletRequest r) {
     List<Map<String, Object>> lessons =
@@ -139,6 +159,7 @@ public class ApiController {
     return ok(attendance);
   }
 
+  /** 教师修改实际开始/结束时间；服务层提交后会重排该课次的 30 分钟缺勤检查。 */
   @PatchMapping("/lesson-sessions/{sid}/time")
   Map<String, Object> time(
       @PathVariable long sid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
@@ -165,6 +186,7 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 学生上报或取消举手，随后通知同课次座位图刷新。 */
   @PostMapping("/lesson-sessions/{sid}/hand-raises")
   Map<String, Object> hand(
       @PathVariable long sid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
@@ -174,11 +196,13 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 返回当前用户可见的课堂消息：群消息加上本人参与的私信。 */
   @GetMapping("/lesson-sessions/{sid}/messages")
   Map<String, Object> messages(@PathVariable long sid, HttpServletRequest r) {
     return ok(school.messages(user(r), sid));
   }
 
+  /** 发送群消息或私信，成功后通过 SSE 通知课堂页面刷新。 */
   @PostMapping("/lesson-sessions/{sid}/messages")
   Map<String, Object> message(
       @PathVariable long sid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
@@ -187,6 +211,7 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 教师为本班学生保存课堂评分，并向同课次页面推送刷新。 */
   @PostMapping("/lesson-sessions/{sid}/scores")
   Map<String, Object> score(
       @PathVariable long sid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
@@ -195,6 +220,7 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 建立仅持续一分钟的 SSE 连接；浏览器收到 ready 后保持连接，收到 refresh 后重新拉取课堂数据。 */
   @GetMapping(value = "/lesson-sessions/{sid}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   SseEmitter events(@PathVariable long sid, HttpServletRequest r) throws IOException {
     SchoolService.role(user(r), "student", "teacher");
@@ -213,6 +239,7 @@ public class ApiController {
     return e;
   }
 
+  /** 学生在选定日期区间内查询可关联到请假申请的具体课次。 */
   @GetMapping("/leave/eligible-sessions")
   Map<String, Object> eligible(
       @RequestParam String startDate, @RequestParam String endDate, HttpServletRequest r) {
@@ -220,22 +247,26 @@ public class ApiController {
     return ok(school.timetable(user(r), LocalDate.parse(startDate), LocalDate.parse(endDate)));
   }
 
+  /** 提交请假申请及其明确选中的课次列表。 */
   @PostMapping("/leave/applications")
   Map<String, Object> apply(@RequestBody Map<String, Object> b, HttpServletRequest r) {
     return ok(school.apply(user(r), b));
   }
 
+  /** 查询当前用户本人可见的请假记录和审批进度。 */
   @GetMapping("/leave/applications/mine")
   Map<String, Object> mine(HttpServletRequest r) {
     return ok(school.applications(user(r), false));
   }
 
+  /** 查询当前审批人的待办申请；服务层过滤审批阶段与权限范围。 */
   @GetMapping("/approvals/pending")
   Map<String, Object> pending(HttpServletRequest r) {
     SchoolService.role(user(r), "teacher", "vice", "dean");
     return ok(school.applications(user(r), true));
   }
 
+  /** 写入审批决定，并刷新申请覆盖的每一个课次页面。 */
   @PostMapping("/approvals/{aid}/decision")
   Map<String, Object> decide(
       @PathVariable long aid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
@@ -248,6 +279,7 @@ public class ApiController {
     return ok(null);
   }
 
+  /** 按日期区间与角色范围导出考勤明细，可选按学生账号或姓名筛选。 */
   @GetMapping("/reports/attendance")
   Map<String, Object> report(
       @RequestParam String startDate,
@@ -258,6 +290,7 @@ public class ApiController {
         school.report(user(r), LocalDate.parse(startDate), LocalDate.parse(endDate), student));
   }
 
+  /** 返回当前用户最近 100 条站内通知。 */
   @GetMapping("/notifications")
   Map<String, Object> notifications(HttpServletRequest r) {
     return ok(
@@ -269,6 +302,7 @@ public class ApiController {
                 SchoolService.id(user(r))));
   }
 
+  /** 上传请假材料：先检查大小、文件头和真实图片可读性，再把二进制内容保存到私有 attachments 表。 */
   @PostMapping("/attachments")
   @Transactional
   Map<String, Object> upload(@RequestParam MultipartFile file, HttpServletRequest r)
@@ -306,6 +340,7 @@ public class ApiController {
     return ok(Map.of("id", school.inserted(), "name", name));
   }
 
+  /** 读取附件时校验“本人上传”或“当前审批人对关联申请可见”，并禁止浏览器缓存私有凭证图片。 */
   @GetMapping("/attachments/{aid}")
   ResponseEntity<byte[]> image(@PathVariable long aid, HttpServletRequest r) {
     Map<String, Object> u = user(r);

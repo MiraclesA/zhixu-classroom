@@ -10,6 +10,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * REST API 的统一认证入口。
+ *
+ * <p>除健康检查和登录/注册外，所有 {@code /api/v1/**} 请求都必须携带 Bearer Token。 Token 只保存其 SHA-256 摘要；校验成功后把当前用户资料写入
+ * request attribute，供控制器和服务层继续做角色、班级或学院范围授权。
+ */
 @Component
 public class AuthFilter extends OncePerRequestFilter {
   private final JdbcTemplate db;
@@ -20,6 +26,7 @@ public class AuthFilter extends OncePerRequestFilter {
     this.clock = clock;
   }
 
+  /** 跳过公开接口；其余请求查询未过期 Token 与已启用用户。认证失败立即返回 401，后续 Controller 不会被调用。 */
   @Override
   protected void doFilterInternal(
       HttpServletRequest req, HttpServletResponse res, FilterChain chain)

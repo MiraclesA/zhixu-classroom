@@ -10,6 +10,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 可选的本地实训数据初始化器。
+ *
+ * <p>仅当 {@code zhixu.demo=true} 且 users 表为空时运行；因此正常重启不会覆盖老师演示时修改的数据库数据。
+ */
 @Component
 class DemoSeed implements ApplicationRunner {
   private final JdbcTemplate db;
@@ -22,6 +27,11 @@ class DemoSeed implements ApplicationRunner {
     this.demo = demo;
   }
 
+  /**
+   * 在一个事务中写入学院、班级、演示账号、课程和覆盖前后若干周的课次。
+   *
+   * <p>最后额外插入一节正在进行的外院课程，用于验证权限范围隔离。
+   */
   @Override
   @Transactional
   public void run(ApplicationArguments args) {

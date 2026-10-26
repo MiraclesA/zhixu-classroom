@@ -20,15 +20,34 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+/**
+ * 知序课堂的核心业务服务层。
+ *
+ * <p>这里集中实现角色与数据范围授权、签到与自动缺勤、课堂互动、请假审批、审计和通知。 Controller 只负责 HTTP/SSE 适配；本类在写入前执行权限校验，并将跨表写入放进事务中。
+ */
 @Service
 public class SchoolService {
+  /** JDBC 访问层；所有 SQL 参数均使用占位符绑定，避免字符串拼接用户输入。 */
   final JdbcTemplate db;
+
+  /** 统一服务端时钟，保证签到和审批不依赖客户端设备时间。 */
   final Clock clock;
+
+  /** 教师自助注册邀请码；为空时关闭教师注册。 */
   final String invite;
+
+  /** Spring 管理的一次性任务调度器，用于按课次预约自动缺勤检查。 */
   final TaskScheduler scheduler;
+
   final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+
+  /** 以客户端 IP 为键的最近登录时间，用于一分钟内的轻量限流。 */
   final ConcurrentHashMap<String, List<Long>> attempts = new ConcurrentHashMap<>();
+
+  /** 保证取消旧任务与设置新任务是一个原子操作。 */
   final Object absenceScheduleLock = new Object();
+
+  /** 当前仅保留的一次自动缺勤任务；每次触发后重新计算下一节课。 */
   ScheduledFuture<?> nextAbsenceCheck;
 
   public SchoolService(
@@ -42,14 +61,17 @@ public class SchoolService {
     this.invite = invite;
   }
 
+  /** 暴露 JDBC 仅供控制器执行极少数基础查询；核心业务写入仍集中在本服务。 */
   public JdbcTemplate database() {
     return db;
   }
 
+  /** 返回服务端时钟，供控制器按同一时区筛选“正在上课”的课次。 */
   public Clock serverClock() {
     return clock;
   }
 
+  /** 对 Token 或邀请码等敏感原文生成 SHA-256 摘要，数据库不保存 Token 原文。 */
   public static String hash(String s) {
     try {
       return HexFormat.of()
@@ -60,10 +82,12 @@ public class SchoolService {
     }
   }
 
+  /** 从认证用户 Map 中安全读取数值 ID。 */
   public static long id(Map<String, Object> u) {
     return num(u.get("id"));
   }
 
+  /** 将 JDBC 数字或请求参数规范为整数；不接受小数、无穷大或非法文本。 */
   public static long num(Object x) {
     if (x instanceof Number n) {
       require(Double.isFinite(n.doubleValue()) && n.doubleValue() == n.longValue(), 400, "数值必须为整数");
@@ -76,18 +100,22 @@ public class SchoolService {
     }
   }
 
+  /** 从请求 Map 取字符串并去除首尾空白；缺失字段返回空字符串。 */
   public static String text(Map<String, Object> x, String k) {
     return Objects.toString(x.get(k), "").trim();
   }
 
+  /** 业务断言失败时抛出可被全局异常处理器转换为指定 HTTP 状态的 ApiError。 */
   public static void require(boolean condition, int status, String message) {
     if (!condition) throw new ApiError(status, message);
   }
 
+  /** 校验当前用户是否属于允许执行操作的角色集合。 */
   public static void role(Map<String, Object> u, String... roles) {
     require(Arrays.asList(roles).contains(u.get("role")), 403, "当前身份无权执行该操作");
   }
 
+  /** 用统一 Clock 获取当前服务端时间，供所有时间敏感业务复用。 */
   public LocalDateTime now() {
     return LocalDateTime.now(clock);
   }
@@ -162,9 +190,7 @@ public class SchoolService {
     }
   }
 
-  /**
-   * 教师改课时间后，必须等事务提交再取消旧定时器、按新时间重新预约；提交失败时不改变已有预约。
-   */
+  /** 教师改课时间后，必须等事务提交再取消旧定时器、按新时间重新预约；提交失败时不改变已有预约。 */
   void rescheduleAbsenceCheckAfterCommit() {
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       finalizeAbsences();
@@ -181,20 +207,24 @@ public class SchoolService {
         });
   }
 
+  /** 将 JDBC Timestamp 或已转换的 LocalDateTime 统一为 LocalDateTime。 */
   public static LocalDateTime time(Object o) {
     return o instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) o;
   }
 
+  /** 执行预期只返回一条记录的查询；未找到时抛出 404。 */
   public Map<String, Object> one(String sql, Object... args) {
     List<Map<String, Object>> rows = db.queryForList(sql, args);
     require(!rows.isEmpty(), 404, "记录不存在");
     return rows.get(0);
   }
 
+  /** 返回当前连接最近一次 INSERT 生成的自增主键。 */
   public long inserted() {
     return db.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
   }
 
+  /** 记录影响业务状态的人工动作，供审批、评分和考勤更正回溯。 */
   void audit(
       Map<String, Object> u,
       String action,
@@ -215,11 +245,17 @@ public class SchoolService {
         now());
   }
 
+  /** 写入站内通知；调用方决定具体接收人和文案。 */
   void notify(long user, String message) {
     db.update(
         "INSERT INTO notifications(user_id,body,created_at) VALUES(?,?,?)", user, message, now());
   }
 
+  /**
+   * 校验账号密码和所选角色，并生成有效期 12 小时的随机会话 Token。
+   *
+   * <p>同一来源一分钟内最多尝试 15 次；数据库只存 Token 摘要，返回给浏览器的原文不会再次落库。
+   */
   public Map<String, Object> login(Map<String, Object> body, String remote) {
     String account = text(body, "account"), password = text(body, "password");
     require(account.length() <= 32 && password.length() <= 72, 400, "账号或密码长度无效");
@@ -256,6 +292,11 @@ public class SchoolService {
     return Map.of("token", token, "user", u);
   }
 
+  /**
+   * 注册学生或教师账号。
+   *
+   * <p>学生必须匹配预置名单并在同一事务内占用名单；教师必须提供服务端配置的邀请码。 事务确保创建账号、分配座位号与更新名单状态不会只完成一半。
+   */
   @Transactional
   public void register(Map<String, Object> body) {
     String account = text(body, "account"),
@@ -315,6 +356,11 @@ public class SchoolService {
     }
   }
 
+  /**
+   * 读取课次及其课程、班级、学院资料，并按当前角色执行行级数据范围授权。
+   *
+   * <p>学生只能进入本班；教师只能管理本人课程；辅导员/分院长只看本学院；院长可全校访问。
+   */
   public Map<String, Object> lesson(Map<String, Object> u, long sid) {
     Map<String, Object> l =
         one(
@@ -333,6 +379,7 @@ public class SchoolService {
     return l;
   }
 
+  /** 为课表和报表拼出与用户角色对应的 SQL 范围条件，并把参数加入 args。 */
   String scope(Map<String, Object> u, List<Object> args) {
     switch (text(u, "role")) {
       case "student" -> {
@@ -354,6 +401,7 @@ public class SchoolService {
     }
   }
 
+  /** 查询最多 150 天的课表，并自动套用 {@link #scope(Map, List)} 的角色数据范围。 */
   public List<Map<String, Object>> timetable(
       Map<String, Object> u, LocalDate start, LocalDate end) {
     require(
@@ -370,6 +418,11 @@ public class SchoolService {
         a.toArray());
   }
 
+  /**
+   * 任课教师修改具体课次的起止时间。
+   *
+   * <p>先锁定课次、更新课次日期并写审计日志；事务真正提交后才重新预约“开课 30 分钟”的自动缺勤任务， 所以失败的改课不会破坏已有调度。
+   */
   @Transactional
   public Map<String, Object> reschedule(Map<String, Object> u, long sid, Map<String, Object> body) {
     role(u, "teacher");
@@ -442,7 +495,10 @@ public class SchoolService {
         "SELECT * FROM attendance WHERE session_id=? AND student_id=? FOR UPDATE", sid, id(u));
   }
 
-  /** 读取座位图及当前考勤状态。 无数据库记录并不一定代表缺勤：在 30 分钟报到窗口内显示 UNREPORTED， 窗口结束后显示 ABSENT。学生查看时会移除其他学生的敏感字段。 */
+  /**
+   * 返回课堂座位图并动态补全未落库考勤：在 30 分钟报到窗口内显示 UNREPORTED，窗口结束后显示 ABSENT。
+   * 学生查看时会移除其他学生的账号、得分、评语和签到时间，避免在座位图越权获取隐私数据。
+   */
   public List<Map<String, Object>> seats(Map<String, Object> u, long sid) {
     Map<String, Object> lesson = lesson(u, sid);
     boolean checkInWindowClosed = now().isAfter(time(lesson.get("start_at")).plusMinutes(30));
@@ -529,6 +585,7 @@ public class SchoolService {
     audit(u, "ATTENDANCE:" + studentId, sid, previous, status, reason);
   }
 
+  /** 学生在实际上课时间内切换举手状态；联合主键使同一学生同一课次只有一条当前状态记录。 */
   @Transactional
   public void hand(Map<String, Object> u, long sid, boolean raised) {
     role(u, "student");
@@ -544,6 +601,7 @@ public class SchoolService {
         raised);
   }
 
+  /** 查询群消息以及当前用户发送或接收的私信，不暴露旁观者私信。 */
   public List<Map<String, Object>> messages(Map<String, Object> u, long sid) {
     role(u, "student", "teacher");
     lesson(u, sid);
@@ -557,6 +615,11 @@ public class SchoolService {
         id(u));
   }
 
+  /**
+   * 发送课堂群消息或师生私信。
+   *
+   * <p>学生只能私信当前任课教师；教师只能私信本班学生，防止跨课次或跨班消息投递。
+   */
   @Transactional
   public void message(Map<String, Object> u, long sid, Map<String, Object> body) {
     role(u, "student", "teacher");
@@ -578,6 +641,7 @@ public class SchoolService {
         now());
   }
 
+  /** 教师保存本班学生课堂评分，并把修改前后的分数和评语写入审计日志。 */
   @Transactional
   public void score(Map<String, Object> u, long sid, Map<String, Object> body) {
     role(u, "teacher");
@@ -605,6 +669,11 @@ public class SchoolService {
         remark);
   }
 
+  /**
+   * 学生提交请假申请，并明确选择受影响的课次。
+   *
+   * <p>服务端重新核验每个课次归属和日期范围，创建申请、目标课次、每位任课教师的首审记录、通知和审计日志。
+   */
   @Transactional
   public Map<String, Object> apply(Map<String, Object> u, Map<String, Object> body) {
     role(u, "student");
@@ -669,6 +738,7 @@ public class SchoolService {
     return Map.of("id", application);
   }
 
+  /** 判断用户是否有权查看某申请：学生本人、关联教师、本学院分院长或院长。 */
   public boolean visible(Map<String, Object> u, Map<String, Object> a) {
     String r = text(u, "role");
     if (r.equals("student")) return id(u) == num(a.get("student_id"));
@@ -684,6 +754,7 @@ public class SchoolService {
     return false;
   }
 
+  /** 查询申请详情；{@code pending=true} 时只保留当前审批角色正好可以处理的阶段。 每条记录附带目标课次、审批日志及多位任课教师的首审进度。 */
   public List<Map<String, Object>> applications(Map<String, Object> u, boolean pending) {
     role(u, "student", "teacher", "vice", "dean");
     List<Map<String, Object>> rows =
@@ -736,6 +807,11 @@ public class SchoolService {
     return out;
   }
 
+  /**
+   * 执行请假审批状态机。
+   *
+   * <p>多位任课教师必须全部首审；超过两天转分院长，学期申请再转院长。最终通过后批量把关联课次考勤写为 LEAVE， 整个审批、考勤变更、审计和通知在同一事务内完成。
+   */
   @Transactional
   public void decide(Map<String, Object> u, long aid, Map<String, Object> body) {
     role(u, "teacher", "vice", "dean");
@@ -832,6 +908,7 @@ public class SchoolService {
     }
   }
 
+  /** 生成权限范围内的考勤明细；未落库记录按是否已超过 30 分钟动态显示 UNREPORTED 或 ABSENT。 */
   public List<Map<String, Object>> report(
       Map<String, Object> u, LocalDate start, LocalDate end, String student) {
     require(
