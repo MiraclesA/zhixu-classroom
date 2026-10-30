@@ -1,12 +1,12 @@
 package cn.zhixu.security;
 
+import cn.zhixu.repository.SchoolRepository;
 import cn.zhixu.service.SchoolService;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -18,10 +18,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  */
 @Component
 public class AuthFilter extends OncePerRequestFilter {
-  private final JdbcTemplate db;
+  private final SchoolRepository db;
   private final Clock clock;
 
-  public AuthFilter(JdbcTemplate db, Clock clock) {
+  public AuthFilter(SchoolRepository db, Clock clock) {
     this.db = db;
     this.clock = clock;
   }

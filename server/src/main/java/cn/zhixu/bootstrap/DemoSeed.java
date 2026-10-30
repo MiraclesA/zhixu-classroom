@@ -1,11 +1,11 @@
 package cn.zhixu.bootstrap;
 
+import cn.zhixu.repository.SchoolRepository;
 import java.time.*;
 import java.util.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,11 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 class DemoSeed implements ApplicationRunner {
-  private final JdbcTemplate db;
+  private final SchoolRepository db;
   private final Clock clock;
   private final boolean demo;
 
-  DemoSeed(JdbcTemplate db, Clock clock, @Value("${zhixu.demo}") boolean demo) {
+  DemoSeed(SchoolRepository db, Clock clock, @Value("${zhixu.demo}") boolean demo) {
     this.db = db;
     this.clock = clock;
     this.demo = demo;

@@ -1,0 +1,5 @@
+{
+  "java.configuration.updateBuildConfiguration": "automatic",
+  "java.import.maven.enabled": true,
+  "java.jdt.ls.java.home": "C:\\Users\\AnYe\\.gradle\\jdks\\eclipse_adoptium-17-amd64-windows.2"
+}

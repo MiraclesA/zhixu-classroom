@@ -2,6 +2,7 @@ package cn.zhixu.service;
 
 import cn.zhixu.common.ApiError;
 import cn.zhixu.model.AttendanceStatus;
+import cn.zhixu.repository.SchoolRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.time.*;
@@ -12,7 +13,6 @@ import java.util.concurrent.ScheduledFuture;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -27,8 +27,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Service
 public class SchoolService {
-  /** JDBC 访问层；所有 SQL 参数均使用占位符绑定，避免字符串拼接用户输入。 */
-  final JdbcTemplate db;
+  /** 数据库访问层；所有 SQL 参数均使用占位符绑定，避免字符串拼接用户输入。 */
+  final SchoolRepository db;
 
   /** 统一服务端时钟，保证签到和审批不依赖客户端设备时间。 */
   final Clock clock;
@@ -51,7 +51,7 @@ public class SchoolService {
   ScheduledFuture<?> nextAbsenceCheck;
 
   public SchoolService(
-      JdbcTemplate db,
+      SchoolRepository db,
       Clock clock,
       TaskScheduler scheduler,
       @Value("${zhixu.teacher-invite}") String invite) {
@@ -61,9 +61,9 @@ public class SchoolService {
     this.invite = invite;
   }
 
-  /** 暴露 JDBC 仅供控制器执行极少数基础查询；核心业务写入仍集中在本服务。 */
-  public JdbcTemplate database() {
-    return db;
+  /** 提供健康检查，避免控制层绕过服务层直接访问数据库。 */
+  public boolean databaseAvailable() {
+    return db.isAvailable();
   }
 
   /** 返回服务端时钟，供控制器按同一时区筛选“正在上课”的课次。 */
@@ -249,6 +249,65 @@ public class SchoolService {
   void notify(long user, String message) {
     db.update(
         "INSERT INTO notifications(user_id,body,created_at) VALUES(?,?,?)", user, message, now());
+  }
+
+  /** 记录密码重置申请；实际身份核验与密码重置由管理员线下完成。 */
+  public void requestPasswordReset(String account) {
+    db.update("INSERT INTO reset_requests(account,created_at) VALUES(?,?)", account, now());
+  }
+
+  /** 使当前 Bearer Token 立即失效。AuthFilter 已确认请求头格式与身份有效性。 */
+  public void logout(String authorization) {
+    db.update("DELETE FROM tokens WHERE token_hash=?", hash(authorization.substring(7)));
+  }
+
+  /** 返回某份请假申请覆盖的课次，供控制器向对应 SSE 订阅者发送刷新事件。 */
+  public List<Long> applicationSessionIds(long applicationId) {
+    return db
+        .queryForList("SELECT session_id FROM leave_targets WHERE application_id=?", applicationId)
+        .stream()
+        .map(target -> num(target.get("session_id")))
+        .toList();
+  }
+
+  /** 返回当前登录用户最近的站内通知，最多 100 条。 */
+  public List<Map<String, Object>> notifications(Map<String, Object> user) {
+    return db.queryForList(
+        "SELECT id,body,created_at FROM notifications WHERE user_id=? ORDER BY id DESC LIMIT 100",
+        id(user));
+  }
+
+  /** 保存学生请假材料，并返回数据库生成的附件 ID。 */
+  @Transactional
+  public long saveAttachment(
+      Map<String, Object> user, String name, String mediaType, byte[] content) {
+    db.update(
+        "INSERT INTO attachments(owner_id,name,media_type,content) VALUES(?,?,?,?)",
+        id(user),
+        name,
+        mediaType,
+        content);
+    return inserted();
+  }
+
+  /** 读取附件并校验访问范围：上传者本人，或对关联请假申请具有审批查看权限的人员才能读取。 */
+  public Map<String, Object> attachment(Map<String, Object> user, long attachmentId) {
+    Map<String, Object> file = one("SELECT * FROM attachments WHERE id=?", attachmentId);
+    boolean allowed = id(user) == num(file.get("owner_id"));
+    if (!allowed) {
+      for (Map<String, Object> application :
+          db.queryForList(
+              "SELECT a.*,u.dept_id FROM leave_applications a JOIN users u ON u.id=a.student_id"
+                  + " WHERE a.attachment_id=?",
+              attachmentId)) {
+        if (visible(user, application)) {
+          allowed = true;
+          break;
+        }
+      }
+    }
+    require(allowed, 403, "无权读取此凭证图片");
+    return file;
   }
 
   /**

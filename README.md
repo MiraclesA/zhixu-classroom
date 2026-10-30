@@ -8,6 +8,22 @@
 
 [查看后端详细调用图](https://miraclesa.github.io/zhixu-classroom/backend-call-flow.html)。该图按顺序展示学生签到与 SSE 刷新、教师改课时间后的事务与调度重排，以及开课 30 分钟后自动补写缺勤的调用链。
 
+## 后端分层
+
+后端源码位于 `server/src/main/java/cn/zhixu/`，按职责分为以下层次：
+
+```text
+controller/   HTTP 与 SSE 控制层：接收请求、返回统一响应、发送页面刷新事件
+service/      业务服务层：权限校验、考勤、请假审批、课堂互动与事务边界
+repository/   数据库层：唯一封装 JdbcTemplate，负责参数化 MySQL 查询与写入
+model/        领域模型与状态枚举
+security/     Token 认证过滤器（通过 repository 查询会话）
+bootstrap/    本地演示数据初始化器（通过 repository 写入数据）
+common/       API 异常与统一异常响应
+```
+
+调用方向固定为 `controller → service → repository → MySQL`；控制层不直接执行 SQL，服务层不依赖 `JdbcTemplate`。VS Code 打开项目根目录后会读取 `.vscode/settings.json`，自动使用本机 JDK 17 重新导入 Maven 依赖。
+
 UI 已按用户纠正恢复为上传 HTML 的原页面模板。首页横幅、四指标卡、快捷入口、侧栏、5×8 座位图、彩色周课表、统计标签和弹窗均沿用原结构；`bridge.js` 与 `reference-data.js` 接入后端数据。31 项参考源码检查通过，视觉对照和交互证据见 `docs/ui-qa/design-qa.md`。重新生成 UI 时运行 `python scripts/prepare_web.py`，不要在 API 适配层另写页面布局。
 
 ## 启动

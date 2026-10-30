@@ -8,7 +8,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import org.springframework.http.*;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -78,7 +77,7 @@ public class ApiController {
   /** 健康检查同时验证 Web 服务和 MySQL 连接是否可用。 */
   @GetMapping("/health")
   Map<String, Object> health() {
-    school.database().queryForObject("SELECT 1", Integer.class);
+    school.databaseAvailable();
     return ok(
         Map.of(
             "database",
@@ -105,10 +104,7 @@ public class ApiController {
   Map<String, Object> reset(@RequestBody Map<String, Object> b) {
     String account = SchoolService.text(b, "account");
     SchoolService.require(account.matches("[A-Za-z0-9]{6,20}"), 400, "账号格式无效");
-    school
-        .database()
-        .update(
-            "INSERT INTO reset_requests(account,created_at) VALUES(?,?)", account, school.now());
+    school.requestPasswordReset(account);
     return ok(Map.of("message", "已登记，请携带学号联系学校管理员核验重置。当前未接通短信或邮件。"));
   }
 
@@ -121,11 +117,7 @@ public class ApiController {
   /** 删除当前 Token，使浏览器保存的会话立即失效。 */
   @PostMapping("/logout")
   Map<String, Object> logout(HttpServletRequest r) {
-    school
-        .database()
-        .update(
-            "DELETE FROM tokens WHERE token_hash=?",
-            SchoolService.hash(r.getHeader("Authorization").substring(7)));
+    school.logout(r.getHeader("Authorization"));
     return ok(null);
   }
 
@@ -271,11 +263,7 @@ public class ApiController {
   Map<String, Object> decide(
       @PathVariable long aid, @RequestBody Map<String, Object> b, HttpServletRequest r) {
     school.decide(user(r), aid, b);
-    for (Map<String, Object> t :
-        school
-            .database()
-            .queryForList("SELECT session_id FROM leave_targets WHERE application_id=?", aid))
-      update(SchoolService.num(t.get("session_id")));
+    for (long sessionId : school.applicationSessionIds(aid)) update(sessionId);
     return ok(null);
   }
 
@@ -293,18 +281,11 @@ public class ApiController {
   /** 返回当前用户最近 100 条站内通知。 */
   @GetMapping("/notifications")
   Map<String, Object> notifications(HttpServletRequest r) {
-    return ok(
-        school
-            .database()
-            .queryForList(
-                "SELECT id,body,created_at FROM notifications WHERE user_id=? ORDER BY id DESC"
-                    + " LIMIT 100",
-                SchoolService.id(user(r))));
+    return ok(school.notifications(user(r)));
   }
 
   /** 上传请假材料：先检查大小、文件头和真实图片可读性，再把二进制内容保存到私有 attachments 表。 */
   @PostMapping("/attachments")
-  @Transactional
   Map<String, Object> upload(@RequestParam MultipartFile file, HttpServletRequest r)
       throws IOException {
     SchoolService.role(user(r), "student");
@@ -329,36 +310,14 @@ public class ApiController {
     String name =
         Objects.toString(file.getOriginalFilename(), "材料图片").replaceAll("[\\\\/\\r\\n]", "_");
     if (name.length() > 150) name = name.substring(name.length() - 150);
-    school
-        .database()
-        .update(
-            "INSERT INTO attachments(owner_id,name,media_type,content) VALUES(?,?,?,?)",
-            SchoolService.id(user(r)),
-            name,
-            png ? "image/png" : "image/jpeg",
-            bytes);
-    return ok(Map.of("id", school.inserted(), "name", name));
+    long id = school.saveAttachment(user(r), name, png ? "image/png" : "image/jpeg", bytes);
+    return ok(Map.of("id", id, "name", name));
   }
 
   /** 读取附件时校验“本人上传”或“当前审批人对关联申请可见”，并禁止浏览器缓存私有凭证图片。 */
   @GetMapping("/attachments/{aid}")
   ResponseEntity<byte[]> image(@PathVariable long aid, HttpServletRequest r) {
-    Map<String, Object> u = user(r);
-    Map<String, Object> f = school.one("SELECT * FROM attachments WHERE id=?", aid);
-    boolean allowed = SchoolService.id(u) == SchoolService.num(f.get("owner_id"));
-    if (!allowed)
-      for (Map<String, Object> a :
-          school
-              .database()
-              .queryForList(
-                  "SELECT a.*,u.dept_id FROM leave_applications a JOIN users u ON u.id=a.student_id"
-                      + " WHERE a.attachment_id=?",
-                  aid))
-        if (school.visible(u, a)) {
-          allowed = true;
-          break;
-        }
-    SchoolService.require(allowed, 403, "无权读取此凭证图片");
+    Map<String, Object> f = school.attachment(user(r), aid);
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType((String) f.get("media_type")))
         .header("Cache-Control", "no-store")
