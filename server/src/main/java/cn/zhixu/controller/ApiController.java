@@ -151,7 +151,7 @@ public class ApiController {
     return ok(attendance);
   }
 
-  /** 教师修改实际开始/结束时间；服务层提交后会重排该课次的 30 分钟缺勤检查。 */
+  /** 教师修改本课次的教室与实际开始/结束时间；提交后会重排该课次的 30 分钟缺勤检查。 */
   @PatchMapping("/lesson-sessions/{sid}/time")
   Map<String, Object> time(
       @PathVariable long sid, @RequestBody Map<String, Object> b, HttpServletRequest r) {

@@ -75,12 +75,9 @@ class DemoSeed implements ApplicationRunner {
         pw);
     db.update("INSERT INTO rosters VALUES('20249999','新同学',1,FALSE)");
     String[] courses = {"Java Web 应用开发", "计算机网络基础", "数据库原理与应用", "软件工程", "大学英语"};
+    String[] rooms = {"实训楼 A302", "教学楼 B204", "教学楼 B205", "教学楼 B206", "教学楼 B207"};
     for (int i = 0; i < 5; i++)
-      db.update(
-          "INSERT INTO courses VALUES(?,?,101,1,?)",
-          i + 1,
-          courses[i],
-          i == 0 ? "实训楼 A302" : "教学楼 B" + (203 + i));
+      db.update("INSERT INTO courses VALUES(?,?,101,1,?)", i + 1, courses[i], rooms[i]);
     db.update("INSERT INTO courses VALUES(6,'外院课程',201,2,'外语楼201')");
     String[] starts = {"08:20", "09:15", "10:10", "11:05", "14:30", "15:25", "16:20", "17:15"};
     int[][] slots = {
@@ -100,9 +97,10 @@ class DemoSeed implements ApplicationRunner {
         if (slots[w][p] >= 0) {
           LocalDateTime start = day.atTime(LocalTime.parse(starts[p]));
           db.update(
-              "INSERT INTO lessons(course_id,lesson_date,period_no,start_at,end_at)"
-                  + " VALUES(?,?,?,?,?)",
+              "INSERT INTO lessons(course_id,room,lesson_date,period_no,start_at,end_at)"
+                  + " VALUES(?,?,?,?,?,?)",
               slots[w][p] + 1,
+              rooms[slots[w][p]],
               day,
               p,
               start,
@@ -111,8 +109,10 @@ class DemoSeed implements ApplicationRunner {
     }
     LocalDateTime start = LocalDateTime.now(clock).minusMinutes(2);
     db.update(
-        "INSERT INTO lessons(course_id,lesson_date,period_no,start_at,end_at) VALUES(?,?,?,?,?)",
+        "INSERT INTO lessons(course_id,room,lesson_date,period_no,start_at,end_at)"
+            + " VALUES(?,?,?,?,?,?)",
         6,
+        "外语楼201",
         today,
         0,
         start,

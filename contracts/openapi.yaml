@@ -353,7 +353,7 @@
     },
     "/lesson-sessions/{sid}/time": {
       "patch": {
-        "summary": "任课教师调整本节开始和结束时间",
+        "summary": "任课教师调整本节教室、开始和结束时间",
         "parameters": [
           {
             "name": "sid",
@@ -399,6 +399,10 @@
                   },
                   "endAt": {
                     "type": "string"
+                  },
+                  "room": {
+                    "type": "string",
+                    "maxLength": 100
                   }
                 }
               }

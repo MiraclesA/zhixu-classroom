@@ -10,7 +10,7 @@ window.classRoom=function classRoom(){
 };
 
 function clockText(value){return String(value).slice(11,16);}
-function courseInfo(lesson){const visual=courseCatalog.find(c=>c.name===lesson.name);return {name:lesson.name,short:visual?.short||lesson.name,teacher:lesson.teacher,room:lesson.room,color:visual?.color||''};}
+function courseInfo(lesson){const visual=courseCatalog.find(c=>c.name===lesson.name);return {id:lesson.id,name:lesson.name,short:visual?.short||lesson.name,teacher:lesson.teacher,room:lesson.room,color:visual?.color||'',lesson_date:lesson.lesson_date,period_no:lesson.period_no,start_at:lesson.start_at,end_at:lesson.end_at};}
 function courseAt(weekday,period){const monday=addDate(dateISO(),-dayNo(dateISO())+(page==='timetable'?weekShift:0)*7),day=addDate(monday,weekday);const lesson=server.lessons.find(l=>datePart(l.lesson_date)===day&&l.period_no===period);return lesson?courseInfo(lesson):null;}
 function periodTime(period,fallback=timings[period]){const lesson=server.lessons.find(l=>datePart(l.lesson_date)===server.day&&l.period_no===period);return lesson?sessionTime(lesson):fallback;}
 function lessonState(item){const lesson=server.lessons.find(l=>l.id===item.id),now=Date.now();if(!lesson)return '未安排';return now<Date.parse(lesson.start_at)?'待开始':now<Date.parse(lesson.end_at)?'课程中':'已结束';}

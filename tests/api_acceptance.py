@@ -37,12 +37,12 @@ def main():
     call('/auth/login','POST',{'account':'20240101','password':'wrong'},expected=401);check('Wrong password denied',True)
     call('/auth/register','POST',{'role':'dean','account':'ATTACK01','name':'test','password':'secure123'},expected=403);check('Privileged registration denied',True)
     call('/auth/register','POST',{'role':'teacher','account':'ATTACK02','name':'test','password':'secure123','code':'EDU2026'},expected=403);check('Browser invitation cannot grant role',True)
-    sql("INSERT INTO lessons(course_id,lesson_date,period_no,start_at,end_at) VALUES(1,CURRENT_DATE(),6,NOW()-INTERVAL 2 MINUTE,NOW()+INTERVAL 43 MINUTE) ON DUPLICATE KEY UPDATE start_at=NOW()-INTERVAL 2 MINUTE,end_at=NOW()+INTERVAL 43 MINUTE;")
+    sql("INSERT INTO lessons(course_id,room,lesson_date,period_no,start_at,end_at) VALUES(1,'实训楼 A302',CURRENT_DATE(),6,NOW()-INTERVAL 2 MINUTE,NOW()+INTERVAL 43 MINUTE) ON DUPLICATE KEY UPDATE start_at=NOW()-INTERVAL 2 MINUTE,end_at=NOW()+INTERVAL 43 MINUTE;")
     sid=int(sql('SELECT id FROM lessons WHERE course_id=1 AND lesson_date=CURRENT_DATE() AND period_no=6;'))
     sql(f'DELETE FROM attendance WHERE session_id={sid};') # Only the synthetic test period created above.
     shifted=datetime.datetime.now().replace(microsecond=0)-datetime.timedelta(minutes=2);shifted_end=shifted+datetime.timedelta(minutes=45)
-    moved=call(f'/lesson-sessions/{sid}/time','PATCH',{'startAt':shifted.isoformat(timespec='minutes'),'endAt':shifted_end.isoformat(timespec='minutes')},t)
-    check('Teacher can adjust own lesson time',int(moved['id'])==sid)
+    moved=call(f'/lesson-sessions/{sid}/time','PATCH',{'room':'主教学楼 B901','startAt':shifted.isoformat(timespec='minutes'),'endAt':shifted_end.isoformat(timespec='minutes')},t)
+    check('Teacher can adjust own lesson room and time',int(moved['id'])==sid and moved['room']=='主教学楼 B901')
     call(f'/lesson-sessions/{sid}/time','PATCH',{'startAt':shifted.isoformat(timespec='minutes'),'endAt':shifted_end.isoformat(timespec='minutes')},other,403);check('Other teacher cannot adjust lesson time',True)
     call(f'/lesson-sessions/{sid}/time','PATCH',{'startAt':shifted_end.isoformat(timespec='minutes'),'endAt':shifted.isoformat(timespec='minutes')},t,400);check('Lesson end must follow start',True)
     # Explicit synthetic classroom demonstrated by the UI; this is not a production time-control API.
@@ -54,7 +54,7 @@ def main():
     sql(f"UPDATE lessons SET start_at=NOW()-INTERVAL 31 MINUTE,end_at=NOW()+INTERVAL 14 MINUTE WHERE id={sid};")
     call(f'/lesson-sessions/{sid}/check-in','POST',{},s2,409);check('Live >30 minute check-in denied',True)
     sql(f"UPDATE lessons SET start_at=NOW()-INTERVAL 2 MINUTE,end_at=NOW()+INTERVAL 43 MINUTE WHERE id={sid};")
-    sql("INSERT INTO lessons(course_id,lesson_date,period_no,start_at,end_at) VALUES(1,CURRENT_DATE(),5,NOW()+INTERVAL 1 HOUR,NOW()+INTERVAL 2 HOUR) ON DUPLICATE KEY UPDATE start_at=NOW()+INTERVAL 1 HOUR,end_at=NOW()+INTERVAL 2 HOUR;")
+    sql("INSERT INTO lessons(course_id,room,lesson_date,period_no,start_at,end_at) VALUES(1,'实训楼 A302',CURRENT_DATE(),5,NOW()+INTERVAL 1 HOUR,NOW()+INTERVAL 2 HOUR) ON DUPLICATE KEY UPDATE start_at=NOW()+INTERVAL 1 HOUR,end_at=NOW()+INTERVAL 2 HOUR;")
     second=int(sql('SELECT id FROM lessons WHERE course_id=1 AND lesson_date=CURRENT_DATE() AND period_no=5 LIMIT 1;'))
     check('Separate lessons remain independent',sql(f"SELECT COUNT(*) FROM attendance WHERE session_id={second} AND student_id=1 AND status='PRESENT';")=='0')
     call(f'/lesson-sessions/{sid}/attendance/1','PATCH',{'status':'LEAVE','reason':'test'},st,403);check('Student cannot correct attendance',True)
@@ -94,7 +94,7 @@ def main():
     sql("INSERT IGNORE INTO rosters VALUES('20249998','名单测试',1,FALSE);")
     call('/auth/register','POST',{'role':'student','account':'20249998','name':'Wrong','password':'secure123'},expected=403);check('Roster identity verified',True)
     result=call('/auth/register','POST',{'role':'student','account':'20249999','name':'新同学','password':'secure123'},expected=200 if sql("SELECT COUNT(*) FROM users WHERE account='20249999';")=='0' else 409);check('Roster registration is server-side',True)
-    sql("INSERT IGNORE INTO courses VALUES(7,'联测课程',201,1,'测试教室'); INSERT INTO lessons(course_id,lesson_date,period_no,start_at,end_at) VALUES(7,CURRENT_DATE(),7,NOW()-INTERVAL 2 MINUTE,NOW()+INTERVAL 43 MINUTE) ON DUPLICATE KEY UPDATE start_at=NOW()-INTERVAL 2 MINUTE,end_at=NOW()+INTERVAL 43 MINUTE;")
+    sql("INSERT IGNORE INTO courses VALUES(7,'联测课程',201,1,'测试教室'); INSERT INTO lessons(course_id,room,lesson_date,period_no,start_at,end_at) VALUES(7,'测试教室',CURRENT_DATE(),7,NOW()-INTERVAL 2 MINUTE,NOW()+INTERVAL 43 MINUTE) ON DUPLICATE KEY UPDATE start_at=NOW()-INTERVAL 2 MINUTE,end_at=NOW()+INTERVAL 43 MINUTE;")
     sid2=int(sql('SELECT id FROM lessons WHERE course_id=7 AND lesson_date=CURRENT_DATE() AND period_no=7;'))
     multi={'type':'short','startDate':str(day),'endDate':str(day),'sessionIds':[sid,sid2],'reason':'Synthetic multi-teacher leave'}
     aid=call('/leave/applications','POST',multi,st)['id'];call(f'/approvals/{aid}/decision','POST',{'decision':'APPROVED'},t)

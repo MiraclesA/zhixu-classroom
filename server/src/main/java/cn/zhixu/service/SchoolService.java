@@ -423,8 +423,9 @@ public class SchoolService {
   public Map<String, Object> lesson(Map<String, Object> u, long sid) {
     Map<String, Object> l =
         one(
-            "SELECT l.*,c.teacher_id,c.class_id,c.name,c.room,cl.dept_id FROM lessons l JOIN"
-                + " courses c ON c.id=l.course_id JOIN classes cl ON cl.id=c.class_id WHERE l.id=?",
+            "SELECT l.*,c.teacher_id,c.class_id,c.name,COALESCE(l.room,c.room) room,cl.dept_id FROM"
+                + " lessons l JOIN courses c ON c.id=l.course_id JOIN classes cl ON"
+                + " cl.id=c.class_id WHERE l.id=?",
             sid);
     switch (text(u, "role")) {
       case "student" ->
@@ -469,16 +470,17 @@ public class SchoolService {
     String s = scope(u, a);
     return db.queryForList(
         "SELECT l.id,l.lesson_date,l.period_no,l.start_at,l.end_at,c.id"
-            + " course_id,c.name,c.room,c.teacher_id,t.name teacher,c.class_id FROM lessons l JOIN"
-            + " courses c ON c.id=l.course_id JOIN classes cl ON cl.id=c.class_id JOIN users t ON"
-            + " t.id=c.teacher_id WHERE l.lesson_date BETWEEN ? AND ? AND "
+            + " course_id,c.name,COALESCE(l.room,c.room) room,c.teacher_id,t.name"
+            + " teacher,c.class_id FROM lessons l JOIN courses c ON c.id=l.course_id JOIN classes"
+            + " cl ON cl.id=c.class_id JOIN users t ON t.id=c.teacher_id WHERE l.lesson_date"
+            + " BETWEEN ? AND ? AND "
             + s
             + " ORDER BY l.start_at",
         a.toArray());
   }
 
   /**
-   * 任课教师修改具体课次的起止时间。
+   * 任课教师修改具体课次的教室与起止时间。
    *
    * <p>先锁定课次、更新课次日期并写审计日志；事务真正提交后才重新预约“开课 30 分钟”的自动缺勤任务， 所以失败的改课不会破坏已有调度。
    */
@@ -494,16 +496,21 @@ public class SchoolService {
       throw new ApiError(400, "上课开始和结束时间格式无效");
     }
     require(end.isAfter(start), 400, "结束时间必须晚于开始时间");
+    String room = text(body, "room");
+    if (room.isBlank()) room = text(l, "room");
+    require(!room.isBlank() && room.length() <= 100, 400, "教室名称须为 1–100 个字符");
     db.queryForList("SELECT id FROM lessons WHERE id=? FOR UPDATE", sid);
-    String before = time(l.get("start_at")) + " ~ " + time(l.get("end_at")),
-        after = start + " ~ " + end;
+    String
+        before = text(l, "room") + " · " + time(l.get("start_at")) + " ~ " + time(l.get("end_at")),
+        after = room + " · " + start + " ~ " + end;
     db.update(
-        "UPDATE lessons SET lesson_date=?,start_at=?,end_at=? WHERE id=?",
+        "UPDATE lessons SET room=?,lesson_date=?,start_at=?,end_at=? WHERE id=?",
+        room,
         start.toLocalDate(),
         start,
         end,
         sid);
-    audit(u, "LESSON_TIME", sid, before, after, "任课教师调整上课时间");
+    audit(u, "LESSON_SCHEDULE", sid, before, after, "任课教师调整教室与上课时间");
     rescheduleAbsenceCheckAfterCommit();
     return lesson(u, sid);
   }
