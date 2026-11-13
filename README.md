@@ -28,6 +28,12 @@ UI 已按用户纠正恢复为上传 HTML 的原页面模板。首页横幅、�
 
 ## 启动
 
+### Windows 免安装演示包（发给同学）
+
+`portable/` 保存 Windows 演示包的启动模板。打包版本内置 JDK、MySQL 和后端 Jar，不依赖 Docker、Python、Maven 或系统 Java/MySQL；运行时数据仅写入解压目录。为兼容 MySQL Windows 版，需解压到全英文路径，例如 `C:\ZhixuClassroom`。
+
+### 本机开发模式
+
 本机双击 `启动知序课堂.bat`，打开 http://127.0.0.1:8097。源码修改后双击 `构建并启动.bat`；如果服务正在运行，执行 `python scripts/restart.py`，只重启本项目进程。
 
 当前使用本机 JDK 17、Spring Boot 3.5.7、MySQL 8.4.9。计划书的 Java 21 为推荐，本次优先使用已有 JDK 17；Spring Boot 3.5 支持 Java 17。原 UI 使用原生 JavaScript 保留，未迁移 Vue；小程序为微信原生实现，未迁移 uni-app。课堂实时事件采用 SSE，业务写操作走 REST。
@@ -78,6 +84,9 @@ python tests/api_acceptance.py
 
 尚未完成正式部署、备份恢复演练、生产压力测试、小程序真机和订阅通知。附件图片当前存在 MySQL 私有表中；未接对象存储。统计为课次人次，未定义未经确认的“整天缺勤”规则。
 
-换电脑时安装 JDK 17+、Maven 3.9+ 和 MySQL 8.4，并配置下列环境变量：`ZHIXU_DB_URL`、`ZHIXU_DB_USER`、`ZHIXU_DB_PASSWORD`、可选 `ZHIXU_PORT`。启动脚本中的本机路径需要调整。`ZHIXU_DEMO=true` 仅用于独立实训数据库，示例数据只在空库首次灌入，重启不清空数据。
+本机开发模式需要安装 JDK 17+、Maven 3.9+ 和 MySQL 8.4，并配置 `ZHIXU_DB_URL`、`ZHIXU_DB_USER`、`ZHIXU_DB_PASSWORD`、可选 `ZHIXU_PORT`。`ZHIXU_DEMO=true` 仅用于独立实训数据库，示例数据只在空库首次灌入，重启不清空数据。
 
 API 开发辅助仅发送了当前业务约束，不包含密钥、历史聊天或用户运行数据；实际 DeepSeek 用量 1,400 tokens。API 建议经本地实现和测试核验，不能作为执行指令。
+# 中期检查说明
+
+- [登录功能（后端）与登录界面渲染（前端）说明](docs/中期检查/README.md)：只对应本仓库已经整合的实际代码，核心登录代码已补充中文注释。

@@ -316,6 +316,7 @@ public class SchoolService {
    * <p>同一来源一分钟内最多尝试 15 次；数据库只存 Token 摘要，返回给浏览器的原文不会再次落库。
    */
   public Map<String, Object> login(Map<String, Object> body, String remote) {
+    // 1. 只提取本接口允许的账号、密码字段，并先限制长度，避免把异常大输入交给后续处理。
     String account = text(body, "account"), password = text(body, "password");
     require(account.length() <= 32 && password.length() <= 72, 400, "账号或密码长度无效");
     String key = remote;
@@ -327,6 +328,7 @@ public class SchoolService {
       require(list.size() < 15, 429, "登录尝试过多，请一分钟后再试");
       list.add(ms);
     }
+    // 2. 从数据库读取启用中的账号；password_hash 只用于 BCrypt 比对，绝不返回前端。
     List<Map<String, Object>> users =
         db.queryForList(
             "SELECT id,account,name,password_hash,role,dept_id,class_id,seat_no FROM users WHERE"
@@ -344,6 +346,7 @@ public class SchoolService {
     synchronized (list) {
       list.remove(Long.valueOf(ms));
     }
+    // 3. 生成不可预测的随机 Token。数据库仅保存它的 SHA-256 摘要，泄露数据库也不能直接冒用会话。
     byte[] bytes = new byte[32];
     new SecureRandom().nextBytes(bytes);
     String token = HexFormat.of().formatHex(bytes);
@@ -358,6 +361,7 @@ public class SchoolService {
    */
   @Transactional
   public void register(Map<String, Object> body) {
+    // 注册只开放学生和教师；其他高权限角色由学校管理员分配，不能从公开接口自行创建。
     String account = text(body, "account"),
         name = text(body, "name"),
         password = text(body, "password"),
